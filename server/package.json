@@ -1,0 +1,8 @@
+{
+  "name": "report-ba-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node index.mjs"
+  }
+}

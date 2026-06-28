@@ -1,0 +1,13 @@
+{
+  "name": "report-ba",
+  "version": "0.1.0",
+  "private": true,
+  "description": "报吧 · 犀利志愿 —— 985吧实时锐评 × 张雪峰方法论 高考志愿 agent",
+  "scripts": {
+    "web": "npm --prefix web run dev",
+    "server": "node server/index.mjs",
+    "build": "npm --prefix web run build",
+    "sync": "node scripts/feedToJson.mjs",
+    "test:cases": "node tests/runCases.mjs"
+  }
+}

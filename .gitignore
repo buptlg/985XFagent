@@ -1,0 +1,19 @@
+# 密钥 / 环境(务必忽略)
+.env
+.env.local
+*.key
+
+# 依赖与构建产物
+node_modules/
+dist/
+web/dist/
+
+# 日志 / 临时
+*.log
+.DS_Store
+
+# 本地工具 / 编辑器(不入公开仓库)
+.claude/
+.vscode/
+.idea/
+*.local
