@@ -6,6 +6,7 @@ import { createServer } from 'node:http'
 import { readFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { FEED, retrieve } from './retrieve.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
@@ -28,30 +29,8 @@ const LLM_MODEL = process.env.LLM_MODEL || process.env.OPENAI_MODEL || 'qwen2.5:
 const LLM_API_KEY = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY || 'local'
 
 const modesCfg = JSON.parse(readFileSync(join(ROOT, 'data', 'modes.json'), 'utf8'))
-const FEED = JSON.parse(readFileSync(join(ROOT, 'web', 'src', 'data', 'feed.json'), 'utf8'))
 
 const citeOf = (it) => `${it.title}— ${it.author} · ${it.date}`
-
-function retrieve(query, n = 5) {
-  const q = query || ''
-  const terms = q.replace(/[^一-龥a-zA-Z0-9]+/g, ' ').split(' ').filter((t) => t.length >= 2)
-  const zh = q.match(/[一-龥]/g) || []
-  const grams = []
-  for (let i = 0; i < zh.length - 1; i++) grams.push(zh[i] + zh[i + 1]) // 2-gram,避免单字误命中(山东≠山大)
-  return FEED.map((it) => {
-    const title = it.title || ''
-    const hay = `${it.title} ${it.quote} ${it.take} ${it.theme} ${(it.heihua || []).join(' ')}`
-    let s = 0
-    for (const t of terms) s += title.includes(t) ? t.length * 3 : hay.includes(t) ? t.length * 1.5 : 0
-    for (const g of grams) s += title.includes(g) ? 1.2 : hay.includes(g) ? 0.6 : 0
-    s += (it.heat || 0) / 200000 // 平手时轻微偏高热
-    return { it, s }
-  })
-    .filter((x) => x.s >= 1.2)
-    .sort((a, b) => b.s - a.s)
-    .slice(0, n)
-    .map((x) => x.it)
-}
 
 function buildSystem(modeKey) {
   const m = modesCfg.modes[modeKey] || modesCfg.modes['985']
@@ -135,8 +114,12 @@ const server = createServer((req, res) => {
     req.on('end', async () => {
       try {
         const { mode = '985', messages = [] } = JSON.parse(body || '{}')
-        const userMsg = [...messages].reverse().find((m) => m.role === 'user')?.content || ''
-        const items = retrieve(userMsg, 5)
+        const userMsgs = messages.filter((m) => m.role === 'user').map((m) => m.content || '')
+        const userMsg = userMsgs[userMsgs.length - 1] || ''
+        // 多轮:用最近 3 条用户消息一起检索,follow-up(如"那南大呢?")不丢主题
+        const retrievalQuery = userMsgs.slice(-3).map((s) => s.slice(0, 200)).join(' ')
+        const items = retrieve(retrievalQuery, 5)
+        // 检索到就把真金句注入;检索为空则不强加约束,让模型按自身理解正常作答
         const context = items
           .map((it) => `「${it.title}」(${it.author}·${it.date}·热度${it.heat}) 金句:${it.quote} ｜ 锐评:${it.take}`)
           .join('\n---\n')
