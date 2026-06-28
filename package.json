@@ -8,6 +8,8 @@
     "server": "node server/index.mjs",
     "build": "npm --prefix web run build",
     "sync": "node scripts/feedToJson.mjs",
-    "test:cases": "node tests/runCases.mjs"
+    "embed": "node scripts/embed.mjs",
+    "test:cases": "node tests/runCases.mjs",
+    "test:retrieve": "node tests/retrieveCheck.mjs"
   }
 }

@@ -48,20 +48,73 @@ export function tokenize(q) {
   return { terms, grams: [...grams] }
 }
 
+// 单条 item 的字面得分(关键词 + 2-gram,标题加权)
+function lexScoreOf(it, terms, grams) {
+  const title = it.title || ''
+  const hay = `${it.title} ${it.quote} ${it.take} ${it.theme} ${(it.heihua || []).join(' ')}`
+  let s = 0
+  for (const t of terms) s += title.includes(t) ? t.length * 3 : hay.includes(t) ? t.length * 1.5 : 0
+  for (const g of grams) s += title.includes(g) ? 1.2 : hay.includes(g) ? 0.6 : 0
+  return s
+}
+
+// 纯字面检索(同步、无网络):tests 与"无 embedding"时的兜底
 export function retrieve(query, n = 5) {
   const { terms, grams } = tokenize(expandQuery(query || ''))
   if (!terms.length && !grams.length) return []
-  return FEED.map((it) => {
-    const title = it.title || ''
-    const hay = `${it.title} ${it.quote} ${it.take} ${it.theme} ${(it.heihua || []).join(' ')}`
-    let s = 0
-    for (const t of terms) s += title.includes(t) ? t.length * 3 : hay.includes(t) ? t.length * 1.5 : 0
-    for (const g of grams) s += title.includes(g) ? 1.2 : hay.includes(g) ? 0.6 : 0
-    s += (it.heat || 0) / 200000 // 平手时轻微偏高热
-    return { it, s }
-  })
+  return FEED.map((it) => ({ it, s: lexScoreOf(it, terms, grams) + (it.heat || 0) / 200000 }))
     .filter((x) => x.s >= 1.2)
     .sort((a, b) => b.s - a.s)
     .slice(0, n)
     .map((x) => x.it)
+}
+
+// ===== 语义层:离线预算的语料向量 + 运行时 query 向量,优雅降级 =====
+let EMB = null
+try { EMB = JSON.parse(readFileSync(join(ROOT, 'web', 'src', 'data', 'feed.embeddings.json'), 'utf8')) } catch {}
+export const semanticReady = !!EMB
+
+const E_BASE = process.env.EMBED_BASE_URL || process.env.OPENAI_BASE_URL || process.env.LLM_BASE_URL || 'http://localhost:11434/v1'
+const E_KEY = process.env.EMBED_API_KEY || process.env.OPENAI_API_KEY || process.env.LLM_API_KEY || 'local'
+const E_MODEL = (EMB && EMB.model) || process.env.EMBED_MODEL || 'text-embedding-3-small' // 必须与建库模型一致
+const SEM_MIN = Number(process.env.EMBED_MIN) || 0.33 // 语义命中门槛(校准:相关≥0.36,跑题≤0.28)
+
+function cosine(a, b) {
+  let dot = 0, na = 0, nb = 0
+  for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i] }
+  return dot / (Math.sqrt(na) * Math.sqrt(nb) || 1)
+}
+
+async function embedQuery(text) {
+  if (!EMB) return null
+  const r = await fetch(`${E_BASE}/embeddings`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${E_KEY}` },
+    body: JSON.stringify({ model: E_MODEL, input: [text] }),
+    signal: AbortSignal.timeout(20000),
+  })
+  if (!r.ok) throw new Error('embed ' + r.status)
+  return (await r.json()).data?.[0]?.embedding || null
+}
+
+// 混合检索(异步):字面 + 语义融合;任一过门槛即入选,都不过→空(交模型自然作答)。
+// 无 embedding 文件 / query 编码失败 → 自动退回纯字面,绝不影响 clone-即跑。
+export async function retrieveHybrid(query, n = 5) {
+  const q = query || ''
+  const { terms, grams } = tokenize(expandQuery(q))
+  let qv = null
+  try { qv = await embedQuery(q) } catch {}
+  const useSem = !!(qv && EMB)
+  const scored = FEED.map((it) => {
+    const lex = lexScoreOf(it, terms, grams) + (it.heat || 0) / 200000
+    const ev = EMB && EMB.vectors[it.id]
+    const sem = useSem && ev ? cosine(qv, ev) : 0
+    return { it, lex, sem }
+  })
+  const cands = scored.filter((x) => x.lex >= 1.2 || x.sem >= SEM_MIN)
+  if (!cands.length) return []
+  const maxLex = Math.max(1e-9, ...cands.map((c) => c.lex))
+  const maxSem = Math.max(1e-9, ...cands.map((c) => c.sem))
+  for (const c of cands) c.final = useSem ? 0.55 * (c.sem / maxSem) + 0.45 * (c.lex / maxLex) : c.lex / maxLex
+  return cands.sort((a, b) => b.final - a.final).slice(0, n).map((c) => c.it)
 }

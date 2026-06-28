@@ -6,7 +6,7 @@ import { createServer } from 'node:http'
 import { readFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { FEED, retrieve } from './retrieve.mjs'
+import { FEED, retrieveHybrid, semanticReady } from './retrieve.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
@@ -142,12 +142,12 @@ function send(res, code, obj) {
 }
 
 // 检索 + 组 prompt 的公共准备(JSON 与流式两个端点共用)
-function prep(mode, messages) {
+async function prep(mode, messages) {
   const userMsgs = messages.filter((m) => m.role === 'user').map((m) => m.content || '')
   const userMsg = userMsgs[userMsgs.length - 1] || ''
   // 多轮:用最近 3 条用户消息一起检索,follow-up(如"那南大呢?")不丢主题
   const retrievalQuery = userMsgs.slice(-3).map((s) => s.slice(0, 200)).join(' ')
-  const items = retrieve(retrievalQuery, 5)
+  const items = await retrieveHybrid(retrievalQuery, 5)
   // 检索到就把真金句注入;检索为空则不强加约束,让模型按自身理解正常作答
   const context = items
     .map((it) => `「${it.title}」(${it.author}·${it.date}·热度${it.heat}) 金句:${it.quote} ｜ 锐评:${it.take}`)
@@ -168,11 +168,11 @@ function readBody(req) {
 const server = createServer((req, res) => {
   if (req.method === 'OPTIONS') return send(res, 204, {})
   if (req.method === 'GET' && req.url === '/api/health')
-    return send(res, 200, { ok: true, entries: FEED.length, model: LLM_MODEL, base: LLM_BASE_URL, keyed: LLM_API_KEY !== 'local' })
+    return send(res, 200, { ok: true, entries: FEED.length, model: LLM_MODEL, base: LLM_BASE_URL, keyed: LLM_API_KEY !== 'local', semantic: semanticReady })
   // 非流式(JSON):保留给 tests/runCases 等批量回归
   if (req.method === 'POST' && req.url === '/api/chat') {
     readBody(req).then(async ({ mode = '985', messages = [] }) => {
-      const { userMsg, items, context, system } = prep(mode, messages)
+      const { userMsg, items, context, system } = await prep(mode, messages)
       let reply, engine, debug
       try { reply = await callLLM(system, messages, context); engine = 'llm' }
       catch (e) { reply = mockReply(mode, userMsg, items); engine = 'mock'; debug = String((e && e.message) || e) }
@@ -184,7 +184,7 @@ const server = createServer((req, res) => {
   // 流式(SSE):前端边收边显示。事件序列 meta(来源) → delta*(增量) → done(引擎)
   if (req.method === 'POST' && req.url === '/api/chat/stream') {
     readBody(req).then(async ({ mode = '985', messages = [] }) => {
-      const { userMsg, items, context, system } = prep(mode, messages)
+      const { userMsg, items, context, system } = await prep(mode, messages)
       res.writeHead(200, {
         'Content-Type': 'text/event-stream; charset=utf-8',
         'Cache-Control': 'no-cache, no-transform',
@@ -217,5 +217,5 @@ const server = createServer((req, res) => {
 })
 
 server.listen(PORT, () =>
-  console.log(`[报吧 server] :${PORT} | model ${LLM_MODEL} @ ${LLM_BASE_URL} | ${FEED.length} 条 feed 知识库`),
+  console.log(`[报吧 server] :${PORT} | model ${LLM_MODEL} @ ${LLM_BASE_URL} | ${FEED.length} 条 feed | 语义检索 ${semanticReady ? '开' : '关(npm run embed 开启)'}`),
 )
