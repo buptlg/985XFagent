@@ -3,26 +3,24 @@ import { FEED } from './data/feed'
 import { HEIHUA } from './data/heihua'
 import { ANCHORS } from './data/anchors'
 import { PITFALLS } from './data/pitfalls'
-import { XUEFENG, NINEBA } from './data/methodology'
+import { XUEFENG, XUEFENG_HEURISTICS, NINEBA } from './data/methodology'
 import type { Theme, FeedItem } from './data/types'
 
-type Mode = '985' | 'chat' | 'radar' | 'xf' | 'fusion' | 'data'
+type Mode = '985' | 'chat' | 'radar' | 'xf' | 'data'
 
 const MODES: { id: Mode; label: string; sub: string }[] = [
   { id: '985', label: '985吧·实时锐评', sub: '当下 / 犀利 / 抓眼球' },
   { id: 'chat', label: '赛博斗蛐蛐', sub: '9吧老哥对线' },
   { id: 'radar', label: '避坑雷达', sub: '院校/专业排雷' },
   { id: 'xf', label: '张雪峰·方法论', sub: '框架决策' },
-  { id: 'fusion', label: '融合', sub: '框架 + 当下炮火' },
   { id: 'data', label: '硬数据', sub: '锚点案例' },
 ]
 
 const THEMES: (Theme | '全部')[] = [
-  '全部', '元·张雪峰', '专业鄙视链', '院校battle', '排行榜', '就业出口', '升学保研', '出国留学', '科研读博', '杂七杂八榜', '分数线跳水', '招生套路', '后悔实录',
+  '全部', '专业鄙视链', '院校battle', '排行榜', '就业出口', '升学保研', '出国留学', '科研读博', '杂七杂八榜', '分数线跳水', '招生套路', '后悔实录',
 ]
 
 const THEME_STYLE: Record<Theme, string> = {
-  '元·张雪峰': 'bg-purple-100 text-purple-700',
   '专业鄙视链': 'bg-rose-100 text-rose-700',
   '院校battle': 'bg-blue-100 text-blue-700',
   '排行榜': 'bg-indigo-100 text-indigo-700',
@@ -202,7 +200,6 @@ export default function App() {
         {mode === 'chat' && <ChatPanel />}
         {mode === 'radar' && <RadarPanel />}
         {mode === 'xf' && <XuefengPanel persona={persona} setPersona={setPersona} />}
-        {mode === 'fusion' && <FusionPanel />}
         {mode === 'data' && <DataPanel />}
       </main>
 
@@ -253,7 +250,7 @@ function XuefengPanel({
   return (
     <div>
       <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-800">
-        ⚠️ 张雪峰老师已于 <b>2026-03-24</b> 因心源性猝死去世。本板块为其报志愿方法论的<b>致敬性整理</b>,非本人发言,不代表其真实观点。
+        ⚠️ 张雪峰老师已于 <b>2026-03-24</b> 因心源性猝死去世。本板块为其报志愿方法论的<b>致敬性整理</b>(提炼自 GitHub 星标最高的张雪峰 skill,9.5k⭐),非本人发言、不代表其真实观点。
       </div>
       <div className="mb-5 inline-flex rounded-lg border border-stone-300 bg-white p-1 text-sm">
         {(['致敬', '扮演'] as const).map((p) => (
@@ -267,16 +264,25 @@ function XuefengPanel({
         ))}
       </div>
 
-      <p className="mb-5 max-w-2xl text-[15px] leading-relaxed text-stone-700">
+      <p className="mb-5 max-w-3xl text-[15px] leading-relaxed text-stone-700">
         {persona === '致敬'
-          ? '张老师的思路核心是:把"就业"作为报志愿的反推起点,先定专业方向,再权衡城市与院校层次。'
-          : '（风格复刻）报志愿啊,你先想清楚一件事——你是要文凭,还是要饭碗?先专业、后城市、再看学校牌子,顺序别反了。'}
+          ? '张老师的内核:把"就业"当报志愿的反推起点,用"社会筛子"看一切选择——先专业 → 次城市 → 后院校;给建议前先问清家庭条件。'
+          : '（风格复刻）我跟你说,报志愿先想明白:你要文凭还是饭碗?家里几个矿?先专业、后城市、再看牌子,顺序千万别反——错一步,普通家庭可能全盘皆输。'}
       </p>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Card title="张雪峰方法论(被9吧反复引用)" points={XUEFENG} accent="purple" />
-        <Card title="9吧自有方法论(更硬核的工具)" points={NINEBA} accent="zhu" />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Card title="5 大心智模型" points={XUEFENG} accent="purple" />
+        <Card title="8 条决策启发式" points={XUEFENG_HEURISTICS} accent="purple" />
+        <Card title="9吧自有方法论(查证工具)" points={NINEBA} accent="zhu" />
       </div>
+
+      <p className="mt-4 text-xs text-stone-400">
+        方法论提炼自 GitHub 星标最高的张雪峰 skill:
+        <a href="https://github.com/alchaincyf/zhangxuefeng-skill" target="_blank" rel="noreferrer" className="text-zhu hover:underline">
+          alchaincyf/zhangxuefeng-skill
+        </a>
+        (9.5k⭐)· 致敬整理,非本人观点。
+      </p>
     </div>
   )
 }
@@ -297,37 +303,6 @@ function Card({
           </li>
         ))}
       </ul>
-    </div>
-  )
-}
-
-function FusionPanel() {
-  return (
-    <div className="space-y-4">
-      <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-black">融合模式:框架 + 当下炮火</h2>
-        <p className="mt-2 text-sm leading-relaxed text-stone-600">
-          用张雪峰的<b>决策框架</b>打底(先专业→次城市→后院校),再用 985吧 的<b>实时锐评</b>当弹药佐证。例如:
-        </p>
-      </div>
-      <div className="grid gap-4 lg:grid-cols-3">
-        <FusionCol step="① 框架" tone="purple" body="先定专业方向。问自己:要就业宽度,还是要行业纵深?" />
-        <FusionCol step="② 当下炮火" tone="zhu" body="临床2024起跳水(华科临八陕西位次24→1800);计算机寒冬喊了十年没真凉。专业冷热在变,用最新位次校准。" />
-        <FusionCol step="③ 落子" tone="ink" body="同分优先可迁移性强的专业;名校大类先问清分流淘汰率(参见「后悔进同济巨类」)。" />
-      </div>
-    </div>
-  )
-}
-
-function FusionCol({ step, tone, body }: { step: string; tone: 'purple' | 'zhu' | 'ink'; body: string }) {
-  const bar = tone === 'purple' ? 'bg-purple-500' : tone === 'zhu' ? 'bg-zhu' : 'bg-ink'
-  return (
-    <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
-      <div className={'h-1.5 ' + bar} />
-      <div className="p-5">
-        <div className="font-extrabold">{step}</div>
-        <p className="mt-2 text-sm leading-relaxed text-stone-600">{body}</p>
-      </div>
     </div>
   )
 }
@@ -403,9 +378,7 @@ function HeihuaDrawer({ initial, onClose }: { initial: string; onClose: () => vo
 
 const CHAT_PERSONAS: { key: string; label: string }[] = [
   { key: '985', label: '985吧·斗蛐蛐' },
-  { key: 'xf-tribute', label: '张雪峰·致敬' },
-  { key: 'xf-roleplay', label: '张雪峰·扮演' },
-  { key: 'fusion', label: '融合' },
+  { key: 'xf', label: '张雪峰·方法论' },
 ]
 
 type Msg = { role: 'user' | 'assistant'; content: string }

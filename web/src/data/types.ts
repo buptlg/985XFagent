@@ -1,5 +1,4 @@
 export type Theme =
-  | '元·张雪峰'
   | '专业鄙视链'
   | '院校battle'
   | '排行榜'
