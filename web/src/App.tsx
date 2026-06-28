@@ -381,7 +381,7 @@ const CHAT_PERSONAS: { key: string; label: string }[] = [
   { key: 'xf', label: '张雪峰·方法论' },
 ]
 
-type Msg = { role: 'user' | 'assistant'; content: string }
+type Msg = { role: 'user' | 'assistant'; content: string; sources?: string[]; engine?: string }
 
 // 反常识 / 抓眼球的示例问题(均出自扒来的 9吧 料)
 const SUGGESTIONS = [
@@ -394,33 +394,69 @@ const SUGGESTIONS = [
   '天大今年突然全投"带电工科",是真转型还是营销?',
 ]
 
+// 解析单个 SSE 事件块(event: x / data: y)
+function parseSSE(block: string): { event: string; data: any } {
+  let event = 'message'
+  let data = ''
+  for (const line of block.split('\n')) {
+    if (line.startsWith('event:')) event = line.slice(6).trim()
+    else if (line.startsWith('data:')) data += line.slice(5).trim()
+  }
+  let parsed: any = {}
+  try { parsed = data ? JSON.parse(data) : {} } catch {}
+  return { event, data: parsed }
+}
+
 function ChatPanel() {
   const [persona, setPersona] = useState('985')
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [thinking, setThinking] = useState(false) // 已发出、首字未到
   const [engine, setEngine] = useState<string | null>(null)
 
   async function send() {
     const text = input.trim()
     if (!text || loading) return
     const next: Msg[] = [...msgs, { role: 'user', content: text }]
-    setMsgs(next)
+    const aIdx = next.length // 流式写入的 assistant 消息下标
+    setMsgs([...next, { role: 'assistant', content: '' }])
     setInput('')
     setLoading(true)
+    setThinking(true)
+    let acc = ''
+    let sources: string[] = []
+    const patch = (extra: Partial<Msg> = {}) =>
+      setMsgs((prev) => prev.map((m, i) => (i === aIdx ? { ...m, content: acc, sources, ...extra } : m)))
     try {
-      const r = await fetch('/api/chat', {
+      const r = await fetch('/api/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode: persona, messages: next }),
       })
-      const j = await r.json()
-      setEngine(j.engine ?? null)
-      setMsgs([...next, { role: 'assistant', content: j.reply || '(空回复)' }])
+      if (!r.body) throw new Error('no stream')
+      const reader = r.body.getReader()
+      const dec = new TextDecoder()
+      let buf = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += dec.decode(value, { stream: true })
+        let idx
+        while ((idx = buf.indexOf('\n\n')) >= 0) {
+          const ev = parseSSE(buf.slice(0, idx))
+          buf = buf.slice(idx + 2)
+          if (ev.event === 'meta') sources = ev.data.used || []
+          else if (ev.event === 'delta') { if (!acc) setThinking(false); acc += ev.data.t || ''; patch() }
+          else if (ev.event === 'done') { setEngine(ev.data.engine ?? null); patch({ engine: ev.data.engine }) }
+        }
+      }
+      if (!acc) patch({ content: '(空回复)' })
     } catch {
-      setMsgs([...next, { role: 'assistant', content: '⚠️ 连不上 server。先在项目根目录运行:node server/index.mjs' }])
+      patch({ content: '⚠️ 连不上 server。先在项目根目录运行:node server/index.mjs' })
     } finally {
       setLoading(false)
+      setThinking(false)
     }
   }
 
@@ -471,20 +507,30 @@ function ChatPanel() {
           </div>
         )}
         {msgs.map((m, i) => (
-          <div key={i} className={'flex ' + (m.role === 'user' ? 'justify-end' : 'justify-start')}>
+          <div key={i} className={'flex flex-col ' + (m.role === 'user' ? 'items-end' : 'items-start')}>
             <div
               className={
                 'max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed ' +
                 (m.role === 'user' ? 'bg-zhu text-white' : 'bg-stone-100 text-ink')
               }
             >
-              {m.content}
+              {m.content || (m.role === 'assistant' ? '…' : '')}
             </div>
+            {m.role === 'assistant' && m.sources && m.sources.length > 0 && (
+              <div className="mt-1.5 flex max-w-[90%] flex-wrap items-center gap-1">
+                <span className="text-xs text-stone-400">📚 依据 9吧:</span>
+                {m.sources.map((s, j) => (
+                  <span key={j} title={s} className="rounded-full bg-stone-100 px-2 py-0.5 text-[11px] text-stone-500">
+                    {s.length > 22 ? s.slice(0, 22) + '…' : s}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         ))}
-        {loading && (
+        {thinking && (
           <div className="text-sm text-stone-400">
-            斗蛐蛐生成中…<span className="text-stone-300">(推理模型思考中,慢的话约 1 分钟,别关)</span>
+            斗蛐蛐生成中…<span className="text-stone-300">(推理模型首字较慢,约 10–60 秒,随后逐字蹦出,别关)</span>
           </div>
         )}
       </div>

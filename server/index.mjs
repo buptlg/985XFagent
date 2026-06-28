@@ -43,17 +43,22 @@ function buildSystem(modeKey) {
   ].filter(Boolean).join('\n\n')
 }
 
+// 组装发给模型的请求体(system 注入语料 + 历史)
+function buildPayload(system, messages, context, stream) {
+  return {
+    model: LLM_MODEL,
+    messages: [{ role: 'system', content: `${system}\n\n【可引用的985吧真实语料】\n${context}` }, ...messages],
+    temperature: 0.85,
+    max_tokens: 1500, // 三层结构化长回答,800 易截断
+    stream,
+  }
+}
+
 async function callLLM(system, messages, context) {
   const r = await fetch(`${LLM_BASE_URL}/chat/completions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${LLM_API_KEY}` },
-    body: JSON.stringify({
-      model: LLM_MODEL,
-      messages: [{ role: 'system', content: `${system}\n\n【可引用的985吧真实语料】\n${context}` }, ...messages],
-      temperature: 0.85,
-      max_tokens: 800,
-      stream: false,
-    }),
+    body: JSON.stringify(buildPayload(system, messages, context, false)),
     signal: AbortSignal.timeout(240000), // 推理模型(如 gpt-5.x-high)较慢,给足时间
   })
   if (!r.ok) throw new Error('LLM ' + r.status)
@@ -61,6 +66,38 @@ async function callLLM(system, messages, context) {
   const reply = j.choices?.[0]?.message?.content
   if (!reply) throw new Error('LLM empty')
   return reply
+}
+
+// 流式:逐段产出模型输出(解析上游 OpenAI 兼容的 SSE data: 行)
+async function* callLLMStream(system, messages, context) {
+  const r = await fetch(`${LLM_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${LLM_API_KEY}` },
+    body: JSON.stringify(buildPayload(system, messages, context, true)),
+    signal: AbortSignal.timeout(240000),
+  })
+  if (!r.ok) throw new Error('LLM ' + r.status)
+  if (!r.body) throw new Error('LLM no body')
+  const reader = r.body.getReader()
+  const decoder = new TextDecoder()
+  let buf = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buf += decoder.decode(value, { stream: true })
+    let idx
+    while ((idx = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, idx).trim()
+      buf = buf.slice(idx + 1)
+      if (!line.startsWith('data:')) continue
+      const data = line.slice(5).trim()
+      if (data === '[DONE]') return
+      try {
+        const delta = JSON.parse(data).choices?.[0]?.delta?.content
+        if (delta) yield delta
+      } catch {}
+    }
+  }
 }
 
 // mock 按人设区分语气 + 控长度,均引用检索到的真金句(来自 feed.json)
@@ -104,34 +141,76 @@ function send(res, code, obj) {
   res.end(JSON.stringify(obj))
 }
 
+// 检索 + 组 prompt 的公共准备(JSON 与流式两个端点共用)
+function prep(mode, messages) {
+  const userMsgs = messages.filter((m) => m.role === 'user').map((m) => m.content || '')
+  const userMsg = userMsgs[userMsgs.length - 1] || ''
+  // 多轮:用最近 3 条用户消息一起检索,follow-up(如"那南大呢?")不丢主题
+  const retrievalQuery = userMsgs.slice(-3).map((s) => s.slice(0, 200)).join(' ')
+  const items = retrieve(retrievalQuery, 5)
+  // 检索到就把真金句注入;检索为空则不强加约束,让模型按自身理解正常作答
+  const context = items
+    .map((it) => `「${it.title}」(${it.author}·${it.date}·热度${it.heat}) 金句:${it.quote} ｜ 锐评:${it.take}`)
+    .join('\n---\n')
+  return { userMsg, items, context, system: buildSystem(mode) }
+}
+
+// 读取请求体并 JSON 解析(带 1MB 上限)
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = ''
+    req.on('data', (c) => { body += c; if (body.length > 1e6) req.destroy() })
+    req.on('end', () => { try { resolve(JSON.parse(body || '{}')) } catch (e) { reject(e) } })
+    req.on('error', reject)
+  })
+}
+
 const server = createServer((req, res) => {
   if (req.method === 'OPTIONS') return send(res, 204, {})
   if (req.method === 'GET' && req.url === '/api/health')
     return send(res, 200, { ok: true, entries: FEED.length, model: LLM_MODEL, base: LLM_BASE_URL, keyed: LLM_API_KEY !== 'local' })
+  // 非流式(JSON):保留给 tests/runCases 等批量回归
   if (req.method === 'POST' && req.url === '/api/chat') {
-    let body = ''
-    req.on('data', (c) => { body += c; if (body.length > 1e6) req.destroy() })
-    req.on('end', async () => {
+    readBody(req).then(async ({ mode = '985', messages = [] }) => {
+      const { userMsg, items, context, system } = prep(mode, messages)
+      let reply, engine, debug
+      try { reply = await callLLM(system, messages, context); engine = 'llm' }
+      catch (e) { reply = mockReply(mode, userMsg, items); engine = 'mock'; debug = String((e && e.message) || e) }
+      send(res, 200, { reply, engine, used: items.map(citeOf), debug })
+    }).catch((e) => send(res, 400, { error: String(e) }))
+    return
+  }
+
+  // 流式(SSE):前端边收边显示。事件序列 meta(来源) → delta*(增量) → done(引擎)
+  if (req.method === 'POST' && req.url === '/api/chat/stream') {
+    readBody(req).then(async ({ mode = '985', messages = [] }) => {
+      const { userMsg, items, context, system } = prep(mode, messages)
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no', // 禁代理缓冲
+        'Access-Control-Allow-Origin': '*',
+      })
+      const sse = (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+      sse('meta', { used: items.map(citeOf) }) // 来源先发,也用作首次 flush
+      let streamed = false
       try {
-        const { mode = '985', messages = [] } = JSON.parse(body || '{}')
-        const userMsgs = messages.filter((m) => m.role === 'user').map((m) => m.content || '')
-        const userMsg = userMsgs[userMsgs.length - 1] || ''
-        // 多轮:用最近 3 条用户消息一起检索,follow-up(如"那南大呢?")不丢主题
-        const retrievalQuery = userMsgs.slice(-3).map((s) => s.slice(0, 200)).join(' ')
-        const items = retrieve(retrievalQuery, 5)
-        // 检索到就把真金句注入;检索为空则不强加约束,让模型按自身理解正常作答
-        const context = items
-          .map((it) => `「${it.title}」(${it.author}·${it.date}·热度${it.heat}) 金句:${it.quote} ｜ 锐评:${it.take}`)
-          .join('\n---\n')
-        const system = buildSystem(mode)
-        let reply, engine, debug
-        try { reply = await callLLM(system, messages, context); engine = 'llm' }
-        catch (e) { reply = mockReply(mode, userMsg, items); engine = 'mock'; debug = String((e && e.message) || e) }
-        send(res, 200, { reply, engine, used: items.map(citeOf), debug })
+        for await (const delta of callLLMStream(system, messages, context)) {
+          streamed = true
+          sse('delta', { t: delta })
+        }
+        sse('done', { engine: 'llm' })
       } catch (e) {
-        send(res, 400, { error: String(e) })
+        if (!streamed) { // 还没吐字就失败 → mock 兜底,整段发出
+          sse('delta', { t: mockReply(mode, userMsg, items) })
+          sse('done', { engine: 'mock', debug: String((e && e.message) || e) })
+        } else {
+          sse('done', { engine: 'llm', debug: '流中断: ' + String((e && e.message) || e) })
+        }
       }
-    })
+      res.end()
+    }).catch((e) => send(res, 400, { error: String(e) }))
     return
   }
   send(res, 404, { error: 'not found' })
