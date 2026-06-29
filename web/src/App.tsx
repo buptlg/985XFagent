@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { FEED } from './data/feed'
 import { HEIHUA } from './data/heihua'
 import { ANCHORS } from './data/anchors'
@@ -449,12 +449,18 @@ function parseSSE(block: string): { event: string; data: any } {
 }
 
 function ChatPanel() {
-  const [persona, setPersona] = useState('985')
-  const [msgs, setMsgs] = useState<Msg[]>([])
+  const [persona, setPersona] = useState<string>(() => localStorage.getItem('baoba.chat.persona') || '985')
+  const [msgs, setMsgs] = useState<Msg[]>(() => {
+    try { return JSON.parse(localStorage.getItem('baoba.chat.msgs') || '[]') } catch { return [] }
+  })
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [thinking, setThinking] = useState(false) // 已发出、首字未到
   const [engine, setEngine] = useState<string | null>(null)
+
+  // 记忆:对话与人设存 localStorage,切板块/刷新都不丢(ChatPanel 切走会卸载)
+  useEffect(() => { localStorage.setItem('baoba.chat.msgs', JSON.stringify(msgs)) }, [msgs])
+  useEffect(() => { localStorage.setItem('baoba.chat.persona', persona) }, [persona])
 
   async function send() {
     const text = input.trim()
@@ -539,10 +545,19 @@ function ChatPanel() {
             {p.label}
           </button>
         ))}
+        {msgs.length > 0 && (
+          <button
+            onClick={() => { setMsgs([]); setEngine(null) }}
+            className="ml-auto rounded-full border border-stone-200 px-2.5 py-1 text-xs font-medium text-stone-400 transition hover:border-zhu hover:text-zhu"
+            title="清空对话(记忆也会清掉)"
+          >
+            🗑 清空
+          </button>
+        )}
         {engine && (
           <span
             className={
-              'ml-auto rounded-full px-2 py-0.5 text-xs font-medium ' +
+              'rounded-full px-2 py-0.5 text-xs font-medium ' +
               (engine === 'llm' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')
             }
           >
@@ -592,7 +607,7 @@ function ChatPanel() {
         ))}
         {thinking && (
           <div className="text-sm text-stone-400">
-            斗蛐蛐生成中…<span className="text-stone-300">(推理模型首字较慢,约 10–60 秒,随后逐字蹦出,别关)</span>
+            斗蛐蛐生成中…<span className="text-stone-300">(首字约 10 秒,随后逐字蹦出,别关)</span>
           </div>
         )}
       </div>
