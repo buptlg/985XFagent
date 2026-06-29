@@ -42,6 +42,42 @@ function heatLabel(n: number) {
   return n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n)
 }
 
+// 各种榜单:精选 9吧 排行榜/名单原图(只收真·榜单;帖子截图/表情包/对比图不收)
+const RANK_IMAGES: { image: string; title: string; sub: string }[] = [
+  { image: '/9ba/gdi-rank.jpg', title: '2026 GDI 中国大学排行榜(主榜)', sub: '🏆 排行榜' },
+  { image: '/9ba/gdi-trend.jpg', title: 'GDI 大学排行榜 · 历年趋势', sub: '🏆 排行榜' },
+  { image: '/9ba/gdi-211.jpg', title: 'GDI 211 院校排行榜', sub: '🏆 排行榜' },
+  { image: '/9ba/dachang.jpg', title: '2026 大厂校招入选次数排行(电信电子互联网)', sub: '🏆 排行榜 · 就业' },
+  { image: '/9ba/yangqi.jpg', title: '16 家央企总部 2025 校招录取人数排名', sub: '🏆 排行榜 · 就业' },
+  { image: '/9ba/yancao.jpg', title: '北京烟草 2025 录用名单(七成 985/211)', sub: '就业出口' },
+  { image: '/9ba/guowang.jpg', title: '国家电网总部近十年录用(清华/西交为主)', sub: '就业出口' },
+  { image: '/9ba/shengxue.jpg', title: '各校升学率 / 深造率榜', sub: '升学保研' },
+]
+
+function RankingsGallery() {
+  return (
+    <Collapse title="📊 各种榜单" sub={`9吧 排行榜/名单原图 · ${RANK_IMAGES.length} 张 · 点击看大图`} defaultOpen={false}>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        {RANK_IMAGES.map((r, i) => (
+          <a
+            key={i}
+            href={r.image}
+            target="_blank"
+            rel="noreferrer"
+            className="group flex flex-col overflow-hidden rounded-xl border border-stone-200 bg-white transition hover:-translate-y-0.5 hover:shadow-md"
+          >
+            <img src={r.image} alt={r.title} loading="lazy" className="h-40 w-full bg-white object-cover object-top" />
+            <div className="px-2.5 py-1.5">
+              <div className="line-clamp-2 text-xs font-semibold leading-snug text-ink">{r.title}</div>
+              <div className="mt-0.5 text-[11px] text-stone-400">{r.sub}</div>
+            </div>
+          </a>
+        ))}
+      </div>
+    </Collapse>
+  )
+}
+
 export default function App() {
   const [mode, setMode] = useState<Mode>('985')
   const [theme, setTheme] = useState<Theme | '全部'>('全部')
@@ -113,6 +149,7 @@ export default function App() {
               )}
             </div>
             {spotlight && <SpotlightCard item={spotlight} />}
+            <RankingsGallery />
             {/* theme chips */}
             <div className="mb-5 flex flex-wrap gap-2">
               {THEMES.map((t) => {
