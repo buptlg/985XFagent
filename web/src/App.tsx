@@ -419,15 +419,33 @@ function ChatPanel() {
     const text = input.trim()
     if (!text || loading) return
     const next: Msg[] = [...msgs, { role: 'user', content: text }]
-    const aIdx = next.length // 流式写入的 assistant 消息下标
+    const aIdx = next.length
     setMsgs([...next, { role: 'assistant', content: '' }])
     setInput('')
     setLoading(true)
     setThinking(true)
-    let acc = ''
+
+    let target = '' // 已从 server 收到的完整文本
+    let shown = 0 // 已"打字"显示的长度
     let sources: string[] = []
+    let eng: string | null = null
+    let finished = false
     const patch = (extra: Partial<Msg> = {}) =>
-      setMsgs((prev) => prev.map((m, i) => (i === aIdx ? { ...m, content: acc, sources, ...extra } : m)))
+      setMsgs((prev) => prev.map((m, i) => (i === aIdx ? { ...m, content: target.slice(0, shown), sources, ...extra } : m)))
+
+    // 打字机:上游对推理模型常整段返回,这里把文本逐字吐出营造真流式;追得上增量、收尾即定格
+    const typer = setInterval(() => {
+      if (shown < target.length) {
+        shown = Math.min(target.length, shown + Math.max(2, Math.ceil((target.length - shown) / 50)))
+        patch()
+      } else if (finished) {
+        clearInterval(typer)
+        setEngine(eng)
+        patch({ engine: eng ?? undefined })
+        setLoading(false)
+      }
+    }, 18)
+
     try {
       const r = await fetch('/api/chat/stream', {
         method: 'POST',
@@ -447,14 +465,17 @@ function ChatPanel() {
           const ev = parseSSE(buf.slice(0, idx))
           buf = buf.slice(idx + 2)
           if (ev.event === 'meta') sources = ev.data.used || []
-          else if (ev.event === 'delta') { if (!acc) setThinking(false); acc += ev.data.t || ''; patch() }
-          else if (ev.event === 'done') { setEngine(ev.data.engine ?? null); patch({ engine: ev.data.engine }) }
+          else if (ev.event === 'delta') { setThinking(false); target += ev.data.t || '' }
+          else if (ev.event === 'done') eng = ev.data.engine ?? null
         }
       }
-      if (!acc) patch({ content: '(空回复)' })
+      finished = true
+      if (!target) { clearInterval(typer); patch({ content: '(空回复)', engine: eng ?? undefined }); setEngine(eng); setLoading(false); setThinking(false) }
     } catch {
-      patch({ content: '⚠️ 连不上 server。先在项目根目录运行:node server/index.mjs' })
-    } finally {
+      clearInterval(typer)
+      target = '⚠️ 连不上 server。先在项目根目录运行:node server/index.mjs'
+      shown = target.length
+      patch()
       setLoading(false)
       setThinking(false)
     }
