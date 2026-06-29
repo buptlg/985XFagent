@@ -17,7 +17,7 @@ const MODES: { id: Mode; label: string; sub: string }[] = [
 ]
 
 const THEMES: (Theme | '全部')[] = [
-  '全部', '专业鄙视链', '院校battle', '排行榜', '就业出口', '升学保研', '出国留学', '科研读博', '杂七杂八榜', '分数线跳水', '招生套路', '后悔实录',
+  '全部', '排行榜', '专业鄙视链', '院校battle', '就业出口', '升学保研', '出国留学', '科研读博', '分数线跳水', '招生套路', '后悔实录',
 ]
 
 const THEME_STYLE: Record<Theme, string> = {
@@ -28,10 +28,14 @@ const THEME_STYLE: Record<Theme, string> = {
   '升学保研': 'bg-cyan-100 text-cyan-700',
   '出国留学': 'bg-sky-100 text-sky-700',
   '科研读博': 'bg-violet-100 text-violet-700',
-  '杂七杂八榜': 'bg-fuchsia-100 text-fuchsia-700',
   '分数线跳水': 'bg-teal-100 text-teal-700',
   '招生套路': 'bg-amber-100 text-amber-700',
   '后悔实录': 'bg-stone-200 text-stone-600',
+}
+
+// 排行榜置顶并带 🏆 图标(只改显示,不改底层 theme 值)
+function themeLabel(t: Theme | '全部') {
+  return t === '排行榜' ? '🏆 排行榜' : t
 }
 
 function heatLabel(n: number) {
@@ -124,7 +128,7 @@ export default function App() {
                         : 'border border-stone-300 bg-white text-stone-600 hover:border-zhu hover:text-zhu')
                     }
                   >
-                    {t}
+                    {themeLabel(t)}
                   </button>
                 )
               })}
@@ -140,7 +144,7 @@ export default function App() {
                 >
                   <div className="mb-3 flex items-center gap-2">
                     <span className={'rounded-md px-2 py-0.5 text-xs font-bold ' + THEME_STYLE[f.theme]}>
-                      {f.theme}
+                      {themeLabel(f.theme)}
                     </span>
                     <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-600">
                       🔥 {heatLabel(f.heat)}
@@ -215,7 +219,7 @@ function SpotlightCard({ item }: { item: FeedItem }) {
     <div className="rise mb-5 overflow-hidden rounded-2xl border-2 border-zhu bg-zhu-soft p-5 shadow-sm">
       <div className="mb-2 flex items-center gap-2">
         <span className="rounded-md bg-zhu px-2 py-0.5 text-xs font-bold text-white">🎲 随机蛐蛐</span>
-        <span className={'rounded-md px-2 py-0.5 text-xs font-bold ' + THEME_STYLE[item.theme]}>{item.theme}</span>
+        <span className={'rounded-md px-2 py-0.5 text-xs font-bold ' + THEME_STYLE[item.theme]}>{themeLabel(item.theme)}</span>
         <span className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-amber-600">🔥 {heatLabel(item.heat)}</span>
       </div>
       <blockquote className="border-l-[3px] border-zhu pl-3 text-base font-semibold leading-relaxed text-ink">

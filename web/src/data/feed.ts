@@ -377,7 +377,7 @@ export const FEED: FeedItem[] = [
   },
   {
     id: 'misc-yangqi',
-    theme: '杂七杂八榜',
+    theme: '排行榜',
     title: '16家央企总部2025校招录取人数排名',
     author: '噼里啪啦啦啦', date: '2026-06-16', heat: 30,
     quote: '各校进16家央企总部人数:中央财经11居首;中国政法6、北邮5、北理5、武大5;复旦/北师大/北外4;海外的南洋理工、UCL、哥大、NUS也入列。',
@@ -387,7 +387,7 @@ export const FEED: FeedItem[] = [
   },
   {
     id: 'misc-nsc',
-    theme: '杂七杂八榜',
+    theme: '排行榜',
     title: 'NSC顶刊论文:前十美国8所、中国2所',
     author: '南少林洪熙官', date: '2026-05-16', heat: 27,
     quote: '2026 N/S/C顶刊产出:哈佛47断层第一、斯坦福31、MIT23;清华18居全球第四、中国内地第一。',
@@ -396,7 +396,7 @@ export const FEED: FeedItem[] = [
   },
   {
     id: 'misc-yuanshi',
-    theme: '杂七杂八榜',
+    theme: '排行榜',
     title: '2025两院院士增选:北京一城≈六城之和',
     author: '撒惜玉0F4', date: '2025-11-21', heat: 179,
     quote: '院士增选按城市:北京32,约等于上海+武汉+南京+合肥+长沙+广州之和;清华9、北大6、北航4领跑。',
@@ -405,7 +405,7 @@ export const FEED: FeedItem[] = [
   },
   {
     id: 'misc-fortune',
-    theme: '杂七杂八榜',
+    theme: '排行榜',
     title: '2026中国大学富豪校友榜:华工人均最壕',
     author: '贴吧用户_J7789t9', date: '2026-05-20', heat: 8,
     quote: '上榜富豪人数前10:浙大、清华、北大、上交、中大、华工/复旦并列、中科大、南大、长江商学院;华工校友财富均值最高(84亿美元)。',
@@ -414,7 +414,7 @@ export const FEED: FeedItem[] = [
   },
   {
     id: 'misc-haidian',
-    theme: '杂七杂八榜',
+    theme: '排行榜',
     title: '北京海淀2024落户:国科大177人超清北之和',
     author: '贴吧用户_58RNJ4Z', date: '2025-07-22', heat: 17,
     quote: '海淀2024引进非京生源1096人,国科大177人登顶、超过清华+北大之和;4年暴涨8倍,且多为硕博。',
@@ -423,7 +423,7 @@ export const FEED: FeedItem[] = [
   },
   {
     id: 'misc-pl15',
-    theme: '杂七杂八榜',
+    theme: '排行榜',
     title: '热点驱动分数线:印巴空战(PL-15)→电科涨分',
     author: '打假工作队', date: '2025-05-09', heat: 166,
     quote: '有帖预测电子科技大学因印巴空战(PL-15火控雷达走红)涨分、直逼中九头部,称张雪峰也密集对比电科。',
@@ -479,7 +479,7 @@ export const FEED: FeedItem[] = [
   },
   {
     id: 'misc-yusuan',
-    theme: '杂七杂八榜',
+    theme: '排行榜',
     title: '2026地方高校预算:海南大学第一、南昌大学第二',
     author: 'C’est知乎周瑞', date: '2026-02-26', heat: 53,
     quote: '2026部分省份地方高校预算:海南大学55.54亿暂列第一(三年年均增速近20%)、南昌大学55.50亿第二——穷省举全省之力砸钱养"唯一211"。',
