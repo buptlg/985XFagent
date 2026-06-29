@@ -10,7 +10,7 @@ type Mode = '985' | 'chat' | 'radar' | 'xf' | 'data'
 
 const MODES: { id: Mode; label: string; sub: string }[] = [
   { id: '985', label: '985吧·实时锐评', sub: '当下 / 犀利 / 抓眼球' },
-  { id: 'chat', label: '赛博斗蛐蛐', sub: '9吧老哥对线' },
+  { id: 'chat', label: '赛博斗蛐蛐·智能问答', sub: '9吧老哥对线' },
   { id: 'radar', label: '避坑雷达', sub: '院校/专业排雷' },
   { id: 'xf', label: '张雪峰·方法论', sub: '框架决策' },
   { id: 'data', label: '硬数据', sub: '锚点案例' },
